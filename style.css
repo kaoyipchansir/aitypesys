@@ -1,0 +1,223 @@
+/* ==========================================
+   1. 基礎佈局與外觀
+========================================== */
+body { 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    padding: 20px; 
+    max-width: 800px; 
+    margin: auto; 
+    background-color: #f9f9f9; 
+}
+
+.section { 
+    background: white; 
+    border: 1px solid #ddd; 
+    padding: 20px; 
+    margin-bottom: 20px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+}
+
+.header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 20px; 
+}
+
+.header h1 { 
+    margin: 0; 
+}
+
+/* ==========================================
+   2. 表單元件與按鈕
+========================================== */
+input[type="text"], 
+input[type="password"], 
+input[type="number"], 
+select { 
+    padding: 8px; 
+    margin-right: 10px; 
+    border: 1px solid #ccc; 
+    border-radius: 4px; 
+}
+
+button { 
+    padding: 8px 15px; 
+    cursor: pointer; 
+    background-color: #007bff; 
+    color: white; 
+    border: none; 
+    border-radius: 4px; 
+    transition: background-color 0.2s; 
+}
+
+button:hover { 
+    background-color: #0056b3; 
+}
+
+.mode-btn { 
+    background-color: #6c757d; 
+    margin-right: 5px; 
+}
+
+.mode-btn.active { 
+    background-color: #28a745; 
+}
+
+.tab-btn { 
+    background-color: white; 
+    color: #333; 
+    border: 2px solid #ddd; 
+    font-weight: bold; 
+    font-size: 16px; 
+    padding: 10px 20px; 
+}
+
+.tab-btn.active { 
+    border-color: #007bff; 
+    color: #007bff; 
+    border-bottom: none; 
+    border-radius: 5px 5px 0 0; 
+}
+
+/* ==========================================
+   3. 核心打字顯示區 (🌟 終極無敵排版方案)
+========================================== */
+#text-display { 
+    font-size: 24px; 
+    padding: 15px; 
+    background: #f1f1f1; 
+    border-radius: 5px; 
+    max-height: 250px; 
+    overflow-y: auto; 
+    user-select: none; 
+    -webkit-user-select: none; 
+    -moz-user-select: none; 
+    -ms-user-select: none;
+    line-height: normal; /* 交給 Flexbox 自動計算高度 */
+}
+
+/* 🌟 核心修正：加上 ">" 符號！確保只控制最外層的方塊，不干擾內層的提示字 */
+#text-display > span { 
+    display: inline-flex;          /* 使用 Flexbox 強制上下排列 */
+    flex-direction: column;        /* 讓題目與提示字垂直上下堆疊 */
+    align-items: center;           /* 水平完美置中對齊 */
+    vertical-align: top;           /* 頂部對齊，確保每行整齊 */
+    margin-right: 8px;             /* 字與字的距離 */
+    margin-bottom: 15px;           /* 行與行的距離 (行距) */
+    min-width: 32px;               /* 保留寬度，確保圖片與文字置中漂亮 */
+    transition: all 0.1s; 
+}
+
+#text-display > span.correct { 
+    color: #28a745; 
+    font-weight: bold; 
+}
+
+#text-display > span.incorrect { 
+    color: #dc3545; 
+    background-color: #f8d7da; 
+    border-radius: 4px; 
+}
+
+#text-display > span.current-char { 
+    background-color: #fff3cd; 
+    border-radius: 4px; 
+    box-shadow: 0 3px 0 #ffc107; /* 用底部陰影取代底線，排版更穩定不跳動 */
+    font-weight: bold; 
+}
+
+/* 每 5 個字加上大間隔，方便閱讀 */
+#text-display.mode-root > span:nth-child(5n),
+#text-display.mode-auxiliary > span:nth-child(5n) { 
+    margin-right: 30px; 
+}
+
+#text-display.mode-root > span.incorrect:nth-child(5n),
+#text-display.mode-auxiliary > span.incorrect:nth-child(5n) { 
+    border-right: none; 
+}
+
+/* ==========================================
+   4. 輔助字型圖片與提示字
+========================================== */
+.cangjie-img { 
+    height: 28px; 
+    object-fit: contain;
+}
+
+#text-display > span.current-char .cangjie-img { 
+    filter: drop-shadow(0px 0px 4px #dc3545); 
+    background-color: #fff; 
+    border-radius: 4px; 
+}
+
+/* 🌟 動態提示字：放棄漂浮，自然排列於下方 */
+.ans-hint { 
+    font-size: 15px; 
+    color: #007bff; 
+    opacity: 0; 
+    transition: opacity 0.2s; 
+    font-weight: bold;
+    margin-top: 6px; /* 往下推，增加與題目/圖片的距離 */
+    height: 15px;    /* 佔據固定高度，沒出現時撐住版面，出現時才不會跳動 */
+    line-height: 1;
+    display: block;
+}
+
+#text-display > span.correct .ans-hint { 
+    opacity: 1; 
+    color: #28a745; 
+}
+
+#text-display > span.incorrect .ans-hint { 
+    opacity: 1; 
+    color: #dc3545; 
+}
+
+/* ==========================================
+   5. 輸入框與其他功能
+========================================== */
+#typing-input { 
+    width: 100%; 
+    font-size: 20px; 
+    padding: 10px; 
+    border: 2px solid #007bff; 
+    border-radius: 5px; 
+    box-sizing: border-box; 
+}
+
+.status-msg { 
+    color: #555; 
+    font-weight: bold; 
+    margin-top: 15px; 
+}
+
+#admin-exercise-list li { 
+    background: #f1f1f1; 
+    margin-bottom: 8px; 
+    padding: 10px; 
+    border-radius: 4px; 
+    border-left: 4px solid #dc3545; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+}
+
+.admin-action-btn { 
+    padding: 4px 8px; 
+    font-size: 14px; 
+    margin-left: 5px; 
+}
+
+.btn-edit { background-color: #ffc107; color: black; }
+.btn-edit:hover { background-color: #e0a800; }
+.btn-delete { background-color: #343a40; color: white; }
+.btn-delete:hover { background-color: #23272b; }
+
+@keyframes pulse { 
+    0% { opacity: 0.6; } 
+    50% { opacity: 1; } 
+    100% { opacity: 0.6; } 
+}
