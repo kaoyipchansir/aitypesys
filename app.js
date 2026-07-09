@@ -461,7 +461,7 @@ async function generateAIContent() {
 }
 
 // ==========================================
-// 9. 核心打字引擎 (自動聚焦修復、防刷分機制)
+// 9. 核心打字引擎 (🌟 包含一鍵重新挑戰功能)
 // ==========================================
 function getEarlySubmitBtnHTML() {
     return `<button onclick="submitEarly()" style="margin-left:15px; padding:3px 12px; background-color:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🛑 提前提交</button>`;
@@ -476,6 +476,12 @@ window.submitEarly = function() {
         clearInterval(timerInterval);
         finishTyping(typingInput, true); 
     }
+};
+
+// 🌟 全域註冊「再挑戰一次」功能
+window.restartExercise = function() {
+    if (!currentText) return;
+    startTypingSession(currentText);
 };
 
 function startTypingSession(text) {
@@ -534,9 +540,7 @@ function setupTypingLogic() {
     const newArea = inputArea.cloneNode(true);
     inputArea.parentNode.replaceChild(newArea, inputArea);
     
-    // 🌟 自動聚焦修正：因為克隆替換節點後焦點會遺失，所以必須重新強迫聚焦！
     newArea.focus();
-    // 雙重保險：避免瀏覽器渲染延遲，加上極短時間的延遲聚焦
     setTimeout(() => newArea.focus(), 50);
 
     let isComposing = false; 
@@ -641,14 +645,24 @@ function finishTyping(inputArea, isForcedEnd) {
     uploadScore(finalWpm, finalAcc);
 }
 
+// 🌟 成績上傳與重啟按鈕生成邏輯
 async function uploadScore(wpm, accuracy) {
+    // 共用的「再挑戰一次」按鈕 HTML
+    const appendRestartBtn = () => {
+        document.getElementById('status-display').innerHTML += ` <br><button onclick="restartExercise()" style="margin-top:10px; padding:6px 16px; background-color:#ffc107; color:#333; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🔄 再挑戰一次</button>`;
+    };
+
     if (currentUser.role === 'admin') {
-        document.getElementById('status-display').innerHTML += ` <br>ℹ️ 管理員測試，成績不上傳。`;
+        document.getElementById('status-display').innerHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
+        document.getElementById('status-display').innerHTML += `ℹ️ 管理員測試，成績不上傳。`;
+        appendRestartBtn();
         return;
     }
 
     if (accuracy < 95) {
-        document.getElementById('status-display').innerHTML += ` <br><span style="color:#dc3545; font-weight:bold;">⚠️ 您的最終結算準確率為 ${accuracy}%。<br>💡 系統規定：為求公平，整體完成度與準確率需達 95% 以上方可進入龍虎榜紀錄！請繼續加油！</span>`;
+        document.getElementById('status-display').innerHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
+        document.getElementById('status-display').innerHTML += `<span style="color:#dc3545; font-weight:bold;">⚠️ 您的最終結算準確率為 ${accuracy}%。<br>💡 系統規定：為求公平，整體完成度與準確率需達 95% 以上方可進入龍虎榜紀錄！請繼續加油！</span>`;
+        appendRestartBtn();
         return; 
     }
 
@@ -656,13 +670,22 @@ async function uploadScore(wpm, accuracy) {
     try {
         const { error } = await supabaseClient.from('leaderboard').insert([insertData]);
         if (error) throw error;
-        document.getElementById('status-display').innerHTML += ` <br>✅ 成績已成功記錄！`;
+        
+        document.getElementById('status-display').innerHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
+        document.getElementById('status-display').innerHTML += `✅ 成績已成功記錄！`;
+        
         if (currentExerciseTitle.startsWith('自學：') || currentExerciseTitle.startsWith('AI文章：')) {
             // 自學不刷新排名
         } else {
             fetchLeaderboard(currentLbFilterType); 
         }
-    } catch (err) { document.getElementById('status-display').innerHTML += ` <br>❌ 上傳失敗: ${err.message}`; }
+    } catch (err) { 
+        document.getElementById('status-display').innerHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
+        document.getElementById('status-display').innerHTML += `❌ 上傳失敗: ${err.message}`; 
+    }
+    
+    // 無論上傳成功或失敗，最後都會浮現重啟按鈕
+    appendRestartBtn();
 }
 
 // ==========================================
