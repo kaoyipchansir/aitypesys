@@ -461,7 +461,7 @@ async function generateAIContent() {
 }
 
 // ==========================================
-// 9. 核心打字引擎 
+// 9. 核心打字引擎 (🌟 防複製、防貼上、防刷分)
 // ==========================================
 function getEarlySubmitBtnHTML() {
     return `<button onclick="submitEarly()" style="margin-left:15px; padding:3px 12px; background-color:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🛑 提前提交</button>`;
@@ -485,7 +485,8 @@ window.restartExercise = function() {
 
 function startTypingSession(text) {
     if(!text) return;
-    currentText = text;
+    
+    currentText = text.replace(/[\r\n\t]+/g, '');
     currentWpm = 0; 
     currentAcc = 0; 
     
@@ -506,8 +507,16 @@ function startTypingSession(text) {
     const displayDiv = document.getElementById('text-display');
     displayDiv.innerHTML = ''; 
     displayDiv.className = `mode-${currentMode}`;
+    
+    // 🌟 防護一：嚴格禁止從顯示區選取與複製文字
+    displayDiv.style.userSelect = "none";
+    displayDiv.oncopy = (e) => {
+        e.preventDefault();
+        alert("⚠️ 系統提示：為維持競賽公平，禁止複製題目！");
+        return false;
+    };
 
-    text.split('').forEach((char, index) => {
+    currentText.split('').forEach((char, index) => {
         const span = document.createElement('span');
         span.id = `char-${index}`;
         if (currentMode === 'auxiliary' && cjLetterMap[char]) {
@@ -539,6 +548,15 @@ function setupTypingLogic() {
     const newArea = inputArea.cloneNode(true);
     inputArea.parentNode.replaceChild(newArea, inputArea);
     
+    // 🌟 防護二：嚴格禁止在輸入框使用「貼上」與「拖曳文字」
+    newArea.addEventListener('paste', (e) => {
+        e.preventDefault();
+        alert("⚠️ 系統提示：禁止使用「貼上」功能作弊！請手動輸入。");
+    });
+    newArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+    });
+
     newArea.focus();
     setTimeout(() => newArea.focus(), 50);
 
@@ -644,7 +662,7 @@ function finishTyping(inputArea, isForcedEnd) {
     uploadScore(finalWpm, finalAcc);
 }
 
-// 🌟 暱稱上傳與審核防呆
+// 🌟 成績與暱稱上傳
 async function uploadScore(wpm, accuracy) {
     const appendRestartBtn = () => {
         document.getElementById('status-display').innerHTML += ` <br><button onclick="restartExercise()" style="margin-top:10px; padding:6px 16px; background-color:#ffc107; color:#333; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🔄 再挑戰一次</button>`;
@@ -667,7 +685,6 @@ async function uploadScore(wpm, accuracy) {
     let finalUsername = currentUser.name.replace('學生_', '');
     let isWaitingApprove = false;
 
-    // 真正將資料寫入雲端的函式
     const doUpload = async () => {
         let insertData = { wpm: wpm || 0, accuracy: accuracy || 0, class: currentUser.class, username: finalUsername, exercise_title: currentExerciseTitle };
         try {
@@ -694,9 +711,7 @@ async function uploadScore(wpm, accuracy) {
         appendRestartBtn();
     };
 
-    // 🌟 若為訪客且達標，請求輸入暱稱
     if (currentUser.class === 'GUEST') {
-        // 使用 setTimeout 讓瀏覽器有時間先印出前面的過關提示，再彈出輸入框
         setTimeout(() => {
             const nickname = prompt("🎉 恭喜完成挑戰！\n\n請輸入您的專屬暱稱：\n(耐心等待管理員確認後，即可在排行榜顯示大名)\n\n※ 若留空，則將以「訪客」身份上傳成績");
             if (nickname && nickname.trim() !== '') {
@@ -711,7 +726,7 @@ async function uploadScore(wpm, accuracy) {
 }
 
 // ==========================================
-// 10. 智慧分級龍虎榜 + 管理員審核與刪除機制
+// 10. 智慧分級龍虎榜
 // ==========================================
 function injectLeaderboardFilters() {
     const lbSection = document.getElementById('leaderboard-section');
@@ -770,7 +785,6 @@ function onLbExerciseChange() {
     fetchLeaderboard(currentLbFilterType);
 }
 
-// 🌟 全局註冊：管理員核准暱稱功能
 window.approveNickname = async function(id, rawUsername) {
     if (!confirm("確定要批准這個暱稱顯示在排行榜上嗎？")) return;
     const newName = rawUsername.replace('UNFIRM_', '');
@@ -809,7 +823,6 @@ async function fetchLeaderboard(filterType = 'ALL') {
             const li = document.createElement('li');
             li.style.cssText = "display:flex; justify-content:space-between; width:100%; align-items:center; padding:8px 0; border-bottom:1px dashed #ccc;";
             
-            // 🌟 智慧判斷顯示邏輯與按鈕
             let displayUsername = row.username;
             let actionBtns = '';
 
@@ -862,7 +875,6 @@ async function deleteLeaderboardRecord(id) {
 async function fetchPersonalHistory() {
     const list = document.getElementById('leaderboard-list');
     
-    // 🌟 訪客不提供個人歷程
     if (currentUser.class === 'GUEST') {
         list.innerHTML = `<li style="justify-content:center; color:#dc3545;">ℹ️ 訪客模式不提供專屬個人歷程，如需記錄請使用正式帳號登入。</li>`;
         return;
