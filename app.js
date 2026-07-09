@@ -461,7 +461,7 @@ async function generateAIContent() {
 }
 
 // ==========================================
-// 9. 核心打字引擎 (🌟 包含一鍵重新挑戰功能)
+// 9. 核心打字引擎 
 // ==========================================
 function getEarlySubmitBtnHTML() {
     return `<button onclick="submitEarly()" style="margin-left:15px; padding:3px 12px; background-color:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🛑 提前提交</button>`;
@@ -478,7 +478,6 @@ window.submitEarly = function() {
     }
 };
 
-// 🌟 全域註冊「再挑戰一次」功能
 window.restartExercise = function() {
     if (!currentText) return;
     startTypingSession(currentText);
@@ -645,9 +644,8 @@ function finishTyping(inputArea, isForcedEnd) {
     uploadScore(finalWpm, finalAcc);
 }
 
-// 🌟 成績上傳與重啟按鈕生成邏輯
+// 🌟 暱稱上傳與審核防呆
 async function uploadScore(wpm, accuracy) {
-    // 共用的「再挑戰一次」按鈕 HTML
     const appendRestartBtn = () => {
         document.getElementById('status-display').innerHTML += ` <br><button onclick="restartExercise()" style="margin-top:10px; padding:6px 16px; background-color:#ffc107; color:#333; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🔄 再挑戰一次</button>`;
     };
@@ -666,30 +664,54 @@ async function uploadScore(wpm, accuracy) {
         return; 
     }
 
-    let insertData = { wpm: wpm || 0, accuracy: accuracy || 0, class: currentUser.class, username: currentUser.name.replace('學生_', ''), exercise_title: currentExerciseTitle };
-    try {
-        const { error } = await supabaseClient.from('leaderboard').insert([insertData]);
-        if (error) throw error;
-        
-        document.getElementById('status-display').innerHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
-        document.getElementById('status-display').innerHTML += `✅ 成績已成功記錄！`;
-        
-        if (currentExerciseTitle.startsWith('自學：') || currentExerciseTitle.startsWith('AI文章：')) {
-            // 自學不刷新排名
-        } else {
-            fetchLeaderboard(currentLbFilterType); 
+    let finalUsername = currentUser.name.replace('學生_', '');
+    let isWaitingApprove = false;
+
+    // 真正將資料寫入雲端的函式
+    const doUpload = async () => {
+        let insertData = { wpm: wpm || 0, accuracy: accuracy || 0, class: currentUser.class, username: finalUsername, exercise_title: currentExerciseTitle };
+        try {
+            const { error } = await supabaseClient.from('leaderboard').insert([insertData]);
+            if (error) throw error;
+            
+            let currentHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
+            
+            if (isWaitingApprove) {
+                currentHTML += `✅ 成績已記錄！<br><span style="color:#6f42c1; font-weight:bold;">⏳ 您的暱稱「${finalUsername.replace('UNFIRM_','')}」已送出，請耐心等待管理員確認後，即會顯示大名。</span>`;
+            } else {
+                currentHTML += `✅ 成績已成功記錄！`;
+            }
+            
+            document.getElementById('status-display').innerHTML = currentHTML;
+
+            if (!currentExerciseTitle.startsWith('自學：') && !currentExerciseTitle.startsWith('AI文章：')) {
+                fetchLeaderboard(currentLbFilterType); 
+            }
+        } catch (err) { 
+            let currentHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
+            document.getElementById('status-display').innerHTML = currentHTML + `❌ 上傳失敗: ${err.message}`; 
         }
-    } catch (err) { 
-        document.getElementById('status-display').innerHTML = document.getElementById('status-display').innerHTML.replace("正在處理成績...", "");
-        document.getElementById('status-display').innerHTML += `❌ 上傳失敗: ${err.message}`; 
+        appendRestartBtn();
+    };
+
+    // 🌟 若為訪客且達標，請求輸入暱稱
+    if (currentUser.class === 'GUEST') {
+        // 使用 setTimeout 讓瀏覽器有時間先印出前面的過關提示，再彈出輸入框
+        setTimeout(() => {
+            const nickname = prompt("🎉 恭喜完成挑戰！\n\n請輸入您的專屬暱稱：\n(耐心等待管理員確認後，即可在排行榜顯示大名)\n\n※ 若留空，則將以「訪客」身份上傳成績");
+            if (nickname && nickname.trim() !== '') {
+                finalUsername = 'UNFIRM_' + nickname.trim();
+                isWaitingApprove = true;
+            }
+            doUpload();
+        }, 100);
+    } else {
+        doUpload();
     }
-    
-    // 無論上傳成功或失敗，最後都會浮現重啟按鈕
-    appendRestartBtn();
 }
 
 // ==========================================
-// 10. 智慧分級龍虎榜
+// 10. 智慧分級龍虎榜 + 管理員審核與刪除機制
 // ==========================================
 function injectLeaderboardFilters() {
     const lbSection = document.getElementById('leaderboard-section');
@@ -748,6 +770,20 @@ function onLbExerciseChange() {
     fetchLeaderboard(currentLbFilterType);
 }
 
+// 🌟 全局註冊：管理員核准暱稱功能
+window.approveNickname = async function(id, rawUsername) {
+    if (!confirm("確定要批准這個暱稱顯示在排行榜上嗎？")) return;
+    const newName = rawUsername.replace('UNFIRM_', '');
+    try {
+        const { error } = await supabaseClient.from('leaderboard').update({ username: newName }).eq('id', id);
+        if (error) throw error;
+        alert("✅ 暱稱批准成功！");
+        fetchLeaderboard(currentLbFilterType);
+    } catch (err) {
+        alert("❌ 批准失敗：" + err.message);
+    }
+};
+
 async function fetchLeaderboard(filterType = 'ALL') {
     currentLbFilterType = filterType;
     const list = document.getElementById('leaderboard-list');
@@ -773,19 +809,34 @@ async function fetchLeaderboard(filterType = 'ALL') {
             const li = document.createElement('li');
             li.style.cssText = "display:flex; justify-content:space-between; width:100%; align-items:center; padding:8px 0; border-bottom:1px dashed #ccc;";
             
-            let adminDelBtn = currentUser.role === 'admin' && row.id
-                ? `<button onclick="deleteLeaderboardRecord('${row.id}')" style="background-color:#dc3545; color:white; padding:3px 8px; font-size:12px; margin-left:10px; border:none; border-radius:4px; cursor:pointer;">🗑️ 刪除</button>` 
-                : '';
+            // 🌟 智慧判斷顯示邏輯與按鈕
+            let displayUsername = row.username;
+            let actionBtns = '';
+
+            if (row.username.startsWith('UNFIRM_')) {
+                if (currentUser.role === 'admin') {
+                    displayUsername = `🔒 <span style="text-decoration:line-through; color:#999;">訪客</span> ➡️ <span style="font-weight:bold; color:#6f42c1;">${row.username.replace('UNFIRM_', '')}</span>`;
+                    if (row.id) {
+                        actionBtns += `<button onclick="approveNickname('${row.id}', '${row.username}')" style="background-color:#28a745; color:white; padding:3px 8px; font-size:12px; margin-left:10px; border:none; border-radius:4px; cursor:pointer;">✅ 批准</button>`;
+                    }
+                } else {
+                    displayUsername = `👻 訪客`;
+                }
+            }
+
+            if (currentUser.role === 'admin' && row.id) {
+                actionBtns += `<button onclick="deleteLeaderboardRecord('${row.id}')" style="background-color:#dc3545; color:white; padding:3px 8px; font-size:12px; margin-left:5px; border:none; border-radius:4px; cursor:pointer;">🗑️ 刪除</button>`;
+            }
 
             li.innerHTML = `
                 <span style="font-weight:bold; font-size:16px; flex-grow:1;">
-                    ${rankMedal}${row.username} 
+                    ${rankMedal}${displayUsername} 
                     <span style="font-size:12px; background:#17a2b8; color:white; padding:2px 6px; border-radius:10px;">${row.class}</span>
                     <span style="font-size:12px; background:#6c757d; color:white; padding:2px 6px; border-radius:10px; margin-left:5px;">${row.exercise_title}</span>
                 </span>
                 <span style="font-weight:bold; color:#28a745;">
                     ${row.wpm} WPM / ${Math.round(row.accuracy)}%
-                    ${adminDelBtn}
+                    ${actionBtns}
                 </span>
             `;
             list.appendChild(li); 
@@ -810,8 +861,14 @@ async function deleteLeaderboardRecord(id) {
 
 async function fetchPersonalHistory() {
     const list = document.getElementById('leaderboard-list');
-    list.innerHTML = `<li style="justify-content:center; color:#6f42c1;">📜 正在讀取您的個人打字歷程...</li>`;
     
+    // 🌟 訪客不提供個人歷程
+    if (currentUser.class === 'GUEST') {
+        list.innerHTML = `<li style="justify-content:center; color:#dc3545;">ℹ️ 訪客模式不提供專屬個人歷程，如需記錄請使用正式帳號登入。</li>`;
+        return;
+    }
+    
+    list.innerHTML = `<li style="justify-content:center; color:#6f42c1;">📜 正在讀取您的個人打字歷程...</li>`;
     const myName = currentUser.name.replace('學生_', '');
     
     if (currentUser.role === 'admin') {
