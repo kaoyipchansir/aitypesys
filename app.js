@@ -106,10 +106,10 @@ function logout() {
 function checkAndStopTyping() {
     const typingInput = document.getElementById('typing-input');
     if (startTime && typingInput && !typingInput.disabled) {
-        const confirmStop = confirm("⚠️ 練習正在進行中！\n確定要切換任務或畫面嗎？（系統將立即終結並上傳您目前的成績）");
+        const confirmStop = confirm("⚠️ 練習正在進行中！\n確定要切換任務或畫面嗎？（未打完的字將視為錯誤，這會大幅降低您的準確率）");
         if (confirmStop) {
             clearInterval(timerInterval);
-            finishTyping(typingInput, true, currentWpm, currentAcc); 
+            finishTyping(typingInput, true); 
             return true;
         } else {
             typingInput.focus(); 
@@ -461,8 +461,23 @@ async function generateAIContent() {
 }
 
 // ==========================================
-// 9. 核心打字引擎
+// 9. 核心打字引擎 (自動聚焦修復、防刷分機制)
 // ==========================================
+function getEarlySubmitBtnHTML() {
+    return `<button onclick="submitEarly()" style="margin-left:15px; padding:3px 12px; background-color:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🛑 提前提交</button>`;
+}
+
+window.submitEarly = function() {
+    if (!startTime) return alert("您還沒開始打字喔！");
+    const typingInput = document.getElementById('typing-input');
+    if (typingInput.disabled) return; 
+
+    if (confirm("⚠️ 確定要提前提交嗎？\n(未打完的字將全部視為錯誤，這會大幅降低您的最終準確率，系統規定需達 95% 準確率才可上榜)")) {
+        clearInterval(timerInterval);
+        finishTyping(typingInput, true); 
+    }
+};
+
 function startTypingSession(text) {
     if(!text) return;
     currentText = text;
@@ -505,12 +520,12 @@ function startTypingSession(text) {
     const typingInput = document.getElementById('typing-input');
     typingInput.disabled = false;
     typingInput.value = '';
-    typingInput.focus();
     
     startTime = null; 
     clearInterval(timerInterval);
     timerInterval = null;
-    document.getElementById('status-display').innerText = '準備好請直接開始打字...';
+    
+    document.getElementById('status-display').innerHTML = `準備好請直接開始打字... ${getEarlySubmitBtnHTML()}`;
     setupTypingLogic();
 }
 
@@ -519,6 +534,11 @@ function setupTypingLogic() {
     const newArea = inputArea.cloneNode(true);
     inputArea.parentNode.replaceChild(newArea, inputArea);
     
+    // 🌟 自動聚焦修正：因為克隆替換節點後焦點會遺失，所以必須重新強迫聚焦！
+    newArea.focus();
+    // 雙重保險：避免瀏覽器渲染延遲，加上極短時間的延遲聚焦
+    setTimeout(() => newArea.focus(), 50);
+
     let isComposing = false; 
 
     function handleTypingCheck() {
@@ -540,7 +560,7 @@ function setupTypingLogic() {
                     document.getElementById('timer-display').innerText = `剩餘時間：${timeRemaining}秒`;
                     if (timeRemaining <= 0) {
                         clearInterval(timerInterval);
-                        finishTyping(newArea, true, currentWpm, currentAcc); 
+                        finishTyping(newArea, true); 
                     }
                 }, 1000);
             }
@@ -573,12 +593,12 @@ function setupTypingLogic() {
             const timeMins = (new Date() - startTime) / 60000;
             currentWpm = Math.round((typed.length / 5) / timeMins);
             currentAcc = Math.round((correctCount / typed.length) * 100);
-            document.getElementById('status-display').innerHTML = `速度：<span style="color:#007bff">${currentWpm > 0 ? currentWpm : 0} WPM</span> | 準確度：<span style="color:#28a745">${currentAcc}%</span>`;
+            document.getElementById('status-display').innerHTML = `速度：<span style="color:#007bff">${currentWpm > 0 ? currentWpm : 0} WPM</span> | 準確度：<span style="color:#28a745">${currentAcc}%</span> ${getEarlySubmitBtnHTML()}`;
         }
 
         if (typed.length === textArray.length) {
             clearInterval(timerInterval);
-            finishTyping(newArea, false, currentWpm, currentAcc);
+            finishTyping(newArea, false);
         }
     }
 
@@ -594,17 +614,42 @@ function setupTypingLogic() {
     });
 }
 
-function finishTyping(inputArea, isTimeUp, finalWpm, finalAcc) {
+function finishTyping(inputArea, isForcedEnd) {
     inputArea.disabled = true;
-    const msg = isTimeUp ? "⏳ 測驗結束！" : "🎉 練習完成！";
-    document.getElementById('status-display').innerHTML += ` <br>${msg} 正在上傳成績...`;
+    
+    const typed = inputArea.value;
+    const typedArray = typed.split('');
+    const textArray = currentText.split('');
+
+    let correctCount = 0;
+    typedArray.forEach((typedChar, index) => {
+        if (index < textArray.length && typedChar === textArray[index]) {
+            correctCount++; 
+        }
+    });
+
+    const timeMins = startTime ? ((new Date() - startTime) / 60000) : 0;
+    const finalWpm = timeMins > 0 ? Math.round((typed.length / 5) / timeMins) : 0;
+    const finalAcc = textArray.length > 0 ? Math.round((correctCount / textArray.length) * 100) : 0;
+
+    currentWpm = finalWpm;
+    currentAcc = finalAcc;
+
+    const msg = isForcedEnd ? "⏳ 測驗提前結束！" : "🎉 練習完成！";
+    document.getElementById('status-display').innerHTML = `速度：<span style="color:#007bff">${finalWpm} WPM</span> | 嚴格結算準確率：<span style="color:#28a745">${finalAcc}%</span> <br>${msg} 正在處理成績...`;
+    
     uploadScore(finalWpm, finalAcc);
 }
 
 async function uploadScore(wpm, accuracy) {
     if (currentUser.role === 'admin') {
-        document.getElementById('status-display').innerHTML += ` <br>ℹ️ 管理員測試，成績不計入龍虎榜。`;
+        document.getElementById('status-display').innerHTML += ` <br>ℹ️ 管理員測試，成績不上傳。`;
         return;
+    }
+
+    if (accuracy < 95) {
+        document.getElementById('status-display').innerHTML += ` <br><span style="color:#dc3545; font-weight:bold;">⚠️ 您的最終結算準確率為 ${accuracy}%。<br>💡 系統規定：為求公平，整體完成度與準確率需達 95% 以上方可進入龍虎榜紀錄！請繼續加油！</span>`;
+        return; 
     }
 
     let insertData = { wpm: wpm || 0, accuracy: accuracy || 0, class: currentUser.class, username: currentUser.name.replace('學生_', ''), exercise_title: currentExerciseTitle };
@@ -621,7 +666,7 @@ async function uploadScore(wpm, accuracy) {
 }
 
 // ==========================================
-// 10. 智慧分級龍虎榜 (🌟 錯誤精準捕捉與修復版)
+// 10. 智慧分級龍虎榜
 // ==========================================
 function injectLeaderboardFilters() {
     const lbSection = document.getElementById('leaderboard-section');
@@ -723,7 +768,6 @@ async function fetchLeaderboard(filterType = 'ALL') {
             list.appendChild(li); 
         });
     } catch (err) { 
-        // 🌟 核心防護：將實際報錯原因印在畫面上
         list.innerHTML = `<li style="justify-content:center; color:#dc3545;">❌ 載入失敗: ${err.message}</li>`; 
         console.error("Leaderboard Error:", err);
     }
@@ -785,7 +829,6 @@ async function fetchPersonalHistory() {
             list.appendChild(li); 
         });
     } catch (err) { 
-        // 🌟 核心防護：將實際報錯原因印在畫面上
         list.innerHTML = `<li style="justify-content:center; color:#dc3545;">❌ 載入歷程失敗: ${err.message}</li>`; 
         console.error("History Error:", err);
     }
