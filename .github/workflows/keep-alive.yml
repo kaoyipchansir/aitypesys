@@ -1,0 +1,17 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # 每天定時自動執行一次 (UTC 時間 0 點，大約是本地早上 8 點)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 允許你隨時手動點擊測試
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 敲門喚醒 Supabase API
+        run: |
+          curl -X GET 'https://dezzirmgreqnzwsgyvck.supabase.co/rest/v1/exercises?select=id&limit=1' \
+          -H "apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlenppcm1ncmVxbnp3c2d5dmNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODI2NTEsImV4cCI6MjA5NzE1ODY1MX0.BsEuciSKYE5338KFsqZOFN8tXrKJBpywThFevvPV_XM" \
+          -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlenppcm1ncmVxbnp3c2d5dmNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1ODI2NTEsImV4cCI6MjA5NzE1ODY1MX0.BsEuciSKYE5338KFsqZOFN8tXrKJBpywThFevvPV_XM"
