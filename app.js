@@ -384,7 +384,7 @@ function generateAdminAuxiliary() {
 }
 
 // ==========================================
-// 8. 自學模式工具與 AI 生成
+// 8. 自學模式工具與 DIFY AI 串接 (🌟 更新區塊)
 // ==========================================
 function startSelfStudy() {
     if (!checkAndStopTyping()) return; 
@@ -431,6 +431,7 @@ function handleSelfFileUpload(event) {
 
 function setAIPrompt(text) { document.getElementById('ai-prompt').value = text; }
 
+// 🌟 全新升級：改呼叫 Dify API
 async function generateAIContent() {
     if (!checkAndStopTyping()) return; 
     const prompt = document.getElementById('ai-prompt').value.trim();
@@ -448,20 +449,51 @@ async function generateAIContent() {
     document.getElementById('exercise-title-display').innerText = `🤖 ${currentExerciseTitle}`;
 
     const displayDiv = document.getElementById('text-display');
-    displayDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #007bff; animation: pulse 1.5s infinite;">⏳ AI 撰寫中，請稍候...</div>`;
+    displayDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #007bff; animation: pulse 1.5s infinite;">⏳ AI (Dify) 撰寫中，請稍候...</div>`;
     document.getElementById('typing-input').disabled = true;
 
     try {
-        const { data, error } = await supabaseClient.functions.invoke('ai-typing-gen', { body: { prompt: enhancedPrompt } });
-        if (error) throw error;
-        startTypingSession(data.text.trim());
+        // ==========================================
+        // 🔑 請在這裡填入你的 Dify API Key 與網址
+        // ==========================================
+        const DIFY_API_KEY = 'app-NRMIVgFH0s8cqGK6uSQbJ7mL'; // 例如: 'app-abc123def456ghi789'
+        const DIFY_API_URL = 'https://api.dify.ai/v1/chat-messages'; // 若使用官方雲端版，此網址不需更改
+
+        const response = await fetch(DIFY_API_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${DIFY_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "inputs": {},
+                "query": enhancedPrompt,
+                "response_mode": "blocking",
+                "user": currentUser.name || "student" // 帶入當前學生名稱方便後台紀錄
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Dify 伺服器錯誤 (狀態碼: ${response.status})`);
+        }
+
+        const data = await response.json();
+        
+        // Dify 的回覆內容通常放在 answer 欄位中
+        if (!data.answer) throw new Error("Dify 回傳格式異常，請確認是否建立為『聊天助手』(Chat App)");
+        
+        startTypingSession(data.answer.trim());
+
     } catch (err) {
-        displayDiv.innerHTML = `<div style="color: #dc3545; text-align: center;">❌ 產生失敗: ${err.message}</div>`;
-    } finally { btn.innerText = "🔮 產生文章"; btn.disabled = false; }
+        displayDiv.innerHTML = `<div style="color: #dc3545; text-align: center;">❌ Dify 產生失敗: ${err.message}</div>`;
+    } finally { 
+        btn.innerText = "🔮 產生文章"; 
+        btn.disabled = false; 
+    }
 }
 
 // ==========================================
-// 9. 核心打字引擎 (🌟 防複製、防貼上、防刷分)
+// 9. 核心打字引擎 
 // ==========================================
 function getEarlySubmitBtnHTML() {
     return `<button onclick="submitEarly()" style="margin-left:15px; padding:3px 12px; background-color:#dc3545; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0px 2px 4px rgba(0,0,0,0.2);">🛑 提前提交</button>`;
@@ -508,7 +540,6 @@ function startTypingSession(text) {
     displayDiv.innerHTML = ''; 
     displayDiv.className = `mode-${currentMode}`;
     
-    // 🌟 防護一：嚴格禁止從顯示區選取與複製文字
     displayDiv.style.userSelect = "none";
     displayDiv.oncopy = (e) => {
         e.preventDefault();
@@ -548,7 +579,6 @@ function setupTypingLogic() {
     const newArea = inputArea.cloneNode(true);
     inputArea.parentNode.replaceChild(newArea, inputArea);
     
-    // 🌟 防護二：嚴格禁止在輸入框使用「貼上」與「拖曳文字」
     newArea.addEventListener('paste', (e) => {
         e.preventDefault();
         alert("⚠️ 系統提示：禁止使用「貼上」功能作弊！請手動輸入。");
